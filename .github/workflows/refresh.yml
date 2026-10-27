@@ -1,0 +1,28 @@
+name: Refresh playlist
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # daily, about 4:17 AM Central
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install rapidfuzz
+      - run: python build.py
+      - name: Commit if changed
+        run: |
+          git config user.name "playlist-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add combined-tv.m3u
+          git diff --cached --quiet || git commit -m "Daily playlist refresh"
+          git push
