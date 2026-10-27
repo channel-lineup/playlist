@@ -26,7 +26,7 @@ if len(iptvepg_rows) < 1000 or len(share_lines) < 1000 or index_txt.count("#EXTI
 # ---- US sports subset (same rules as the original us-sports.m3u) ----
 groups=[
 ("US Sports Networks",r"^(ESPN|ESPN2|ESPNU|ESPNDeportes|ESPN8TheOcho)\.us@|^(FoxSports1|FoxSports2|FoxDeportes|NFLNetwork|NBATV|MLB|NHLNetwork|ACCNetwork|MSG|USANetwork|TennisChannel|TennisChannel2|beINSPORTSXTRA|beINSPORTSXTRAenEspanol)\.us@"),
-("US Broadcast Networks",r"^(ABC|CBS|NBC|Fox|TNT|TBS|truTV|IONTV|Telemundo|Univision|UniMas)\.us@"),
+("US Broadcast Networks",r"^(ABC|CBS|NBC|Fox|TNT|TBS|truTV|IONTV|Telemundo|Univision|UniMas|MNT)\.us@"),
 ("League & Team Channels",r"^(NFLChannel|MLBStrikeZone|NBCSportsNOW|CBSSportsHQ|Pac12Insider|ACCDigitalNetwork|Stadium|BEKSports|PGATour|NHRATV|PBRRidePass|WWENetwork|PFLMMA|FuboSportsNetwork|SportsGrid|DraftKingsNetwork|FloHockey|FloRacing|Overtime|LacrosseTV)\.us@|^HardKnocks\.ca@"),
 ("International - US Leagues",r"^SkySportsNFL\.uk@|^(TSN4|TSNTheOcho|CTV)\.ca@|^ESPN[0-9]?(LatinAmerica|Extra)LatinAmerica?\.us@|^ESPN(Extra)?LatinAmerica\.us@|^ESPN[0-9]LatinAmerica\.us@|^ESPN[0-9]?\.(br|nl)@|^ESPNPremium\.(ar|cl)@|^DSports2?\.us@|^FoxSports2?\.ar@|^ClaroSports\.mx@|^AztecaDeportesNetwork\.mx@"),
 ]
@@ -172,10 +172,14 @@ def news_only(tid, url):
     host = urlparse(url).netloc.lower()
     return host.endswith(NEWS_ONLY_HOSTS) or "nbculocallive" in host
 dropped_news_only = []
+HIDDEN_SPORTS = re.compile(r"(?i)\bsports?\b|big ten network|sec network|yes network|rugby|wrestling|fighting championship|pro arena|vivacom arena")
+NOT_SPORTS = re.compile(r"(?i)box office|movies|sports? news\b.*radio")
+NO_EPG_ID = "none"
+FREETV_SPORTS = re.compile(r"(?i)sport|\bspor\b|deport|esporte|varzesh|calcio|tennis|racing|big ten|sec network")
 # iptv-org channels whose category includes Sports; Free-TV entries are kept when they're the same channel
 sports_ids = {m.group(1).split("@")[0].lower() for m in re.finditer(r'tvg-id="([^"]+)"[^\n]*group-title="[^"]*Sports', index_txt)}
 GROUP_ORDER = ["🏈 US Sports Networks", "📺 US Broadcast Networks", "🏆 League & Team Channels",
-               "🌎 International - US Leagues", "🏅 More Sports"]
+               "🌎 International - US Leagues", "🏅 More Sports", "🧭 Sports - No Guide", "📰 Local News Streams"]
 groups_out = defaultdict(list); stats = defaultdict(lambda: defaultdict(int)); by_src = defaultdict(int)
 used_sections = set(); dropped_no_epg = []; cache = {}
 for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org", index_txt)]:
@@ -191,10 +195,16 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
         tid = (re.search(r'tvg-id="([^"]*)"', l) or [None, ""])[1]
         g = (re.search(r'group-title="([^"]*)"', l) or [None, ""])[1]
         # sports only
-        if label == "iptv-org" and "Sports" not in g.split(";"): continue
-        if label == "Free-TV" and tid.split("@")[0].lower() not in sports_ids: continue
+        name = l.rsplit(",", 1)[-1].strip()
+        if label == "iptv-org" and "Sports" not in g.split(";") and not (HIDDEN_SPORTS.search(name) and not NOT_SPORTS.search(name)): continue
+        if label == "Free-TV" and tid.split("@")[0].lower() not in sports_ids and not FREETV_SPORTS.search(name): continue
         if label == "Sports" and g == "US Broadcast Networks" and news_only(tid, url):
-            dropped_news_only.append(l.rsplit(",", 1)[-1].strip()); continue
+            if "frequency.stream" in url:   # STIRR shut down; these links are permanently dead
+                dropped_news_only.append(name); continue
+            l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{NO_EPG_ID}"', l)
+            l = re.sub(r' tvg-name="[^"]*"', "", l)
+            l = re.sub(r'group-title="[^"]*"', 'group-title="📰 Local News Streams"', l)
+            groups_out["📰 Local News Streams"].append([l] + extra + [url]); stats[label]["news_group"] += 1; continue
         name = l.rsplit(",", 1)[-1].strip()
         tc = (re.search(r'tvg-country="([^"]*)"', l) or [None, ""])[1].lower()
         m = re.search(r"\.([a-z]{2})(@|$)", tid)
@@ -205,7 +215,12 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
         stats[label]["sports"] += 1
         # EPG only: a channel appears once a guide is mapped to it
         if not e:
-            dropped_no_epg.append(f"{label}: {name}"); continue
+            dropped_no_epg.append(f"{label}: {name}")
+            if any(url == ent[-1] for ent in groups_out["🧭 Sports - No Guide"]): continue
+            l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{NO_EPG_ID}"', l) if 'tvg-id="' in l else l.replace("#EXTINF:-1", f'#EXTINF:-1 tvg-id="{NO_EPG_ID}"', 1)
+            l = re.sub(r' tvg-name="[^"]*"', "", l)
+            l = re.sub(r'group-title="[^"]*"', 'group-title="🧭 Sports - No Guide"', l) if 'group-title="' in l else l.replace(",", ' group-title="🧭 Sports - No Guide",', 1)
+            groups_out["🧭 Sports - No Guide"].append([l] + extra + [url]); continue
         stats[label]["kept"] += 1; by_src[e[1]] += 1
         if e[1] != "iptv-epg.org": used_sections.add(e[1])
         l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{e[0]}"', l) if 'tvg-id="' in l else l.replace("#EXTINF:-1", f'#EXTINF:-1 tvg-id="{e[0]}"', 1)
@@ -224,7 +239,7 @@ print("no guide yet:", len(dropped_no_epg), "| news-only locals dropped:", len(d
 
 # ---- one combined guide: only the channels in this playlist, from every source ----
 import xml.etree.ElementTree as ET, os
-wanted = set(re.findall(r'tvg-id="([^"]+)"', "\n".join(out)))
+wanted = set(re.findall(r'tvg-id="([^"]+)"', "\n".join(out))) - {NO_EPG_ID}
 channels, programmes, found = [], [], set()
 for u in urls:
     req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
