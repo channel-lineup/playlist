@@ -19,6 +19,7 @@ jobs:
           restore-keys: alerts-state-
       - run: python3 alert.py
         env:
+          ALERT_RULES: ${{ secrets.ALERT_RULES }}
           PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
           PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
