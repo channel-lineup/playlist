@@ -1,0 +1,13 @@
+https://iptv-epg.org/files/epg-us.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_US2.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_CA2.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_CO1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_AR1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_SV1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_PE1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_NL1.xml.gz
+https://epgshare01.online/epgshare01/epg_ripper_PLEX1.xml.gz

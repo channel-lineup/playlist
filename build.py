@@ -50,8 +50,26 @@ def sports_subset(text):
 
 sports_txt = sports_subset(index_txt)
 
-SHARE_SECTIONS = ["US_SPORTS1", "US2", "US_LOCALS1"]   # priority order after iptv-epg.org
-SRC_RANK = {"iptv-epg.org": 0, "US_SPORTS1": 1, "US2": 2, "US_LOCALS1": 3}
+SHARE_SECTIONS = ["US_SPORTS1", "US2", "US_LOCALS1", "CA2", "UK1", "MX1", "CO1", "AR1", "SV1", "PE1", "BR1", "NL1", "PLEX1"]
+SRC_RANK = {"iptv-epg.org": 0, **{sec: i + 1 for i, sec in enumerate(SHARE_SECTIONS)}}
+# hand-checked guide IDs for sports channels whose names don't line up with any guide
+OVERRIDES = {
+    "AztecaDeportesNetwork.mx@SD": "plex.tv.Azteca.Deportes.Network.plex", "ClaroSports.mx@SD": "Claro.Sports.1.mx",
+    "CTV.ca@CFTODT": "CTV.Toronto.HD.ca2", "DSports.us@Panregional": "DSPORTS.(COL).(DTSC).co",
+    "DSports2.us@Panregional": "DSPORTS.2.(DTS2).co", "ESPN.nl@HD": "ESPN.nl", "ESPN2.nl@HD": "ESPN.2.nl",
+    "ESPN3.nl@HD": "ESPN.3.nl", "ESPN4.nl@HD": "ESPN.4.nl", "ESPN.br@SD": "ESPN.br",
+    "ESPN3.br@SD": "São.Paulo/SP..ESPN.3.HD.br", "ESPN4.br@SD": "São.Paulo/SP..ESPN.4.HD.br",
+    "ESPNLatinAmerica.us@South": "Canal.ESPN.(Sur).sv", "ESPNLatinAmerica.us@Argentina": "Canal.ESPN.(Argentina).ar",
+    "ESPNLatinAmerica.us@Colombia": "Canal.ESPN.(Colombia).sv", "ESPNLatinAmerica.us@Mexico": "Canal.ESPN.(México).sv",
+    "ESPN2LatinAmerica.us@South": "Canal.ESPN.2.(Sur).sv", "ESPN2LatinAmerica.us@Argentina": "Canal.ESPN.2.(Sur).sv",
+    "ESPN2LatinAmerica.us@Colombia": "Canal.ESPN.2.(Colombia).sv", "ESPN3LatinAmerica.us@South": "Canal.ESPN.3.(Sur).sv",
+    "ESPN3LatinAmerica.us@Argentina": "Canal.ESPN.3.(Argentina).ar", "ESPN4LatinAmerica.us@South": "Canal.ESPN.4.(Sur).sv",
+    "ESPN5LatinAmerica.us@South": "Canal.ESPN.5.(Sudamérica).sv", "ESPN6LatinAmerica.us@SD": "Canal.ESPN.6.(Centroamérica.y.República.Dominicana).sv",
+    "ESPN7LatinAmerica.us@SD": "Canal.ESPN.7.(Sudamérica).sv", "ESPNExtraLatinAmerica.us@Argentine": "ESPN.EXTRA.HD.(ESPN.EXTRA.HD).pe",
+    "ESPNPremium.cl@SD": "Canal.ESPN.Premium.(Chile).sv", "Fox.us@West": "FOXWest_KTTV.us", "NBC.us@West": "NBCWest_KNBC.us",
+    "FoxSports.ar@SD": "Canal.Fox.Sports.(Cono.Sur).sv", "HardKnocks.ca@SD": "plex.tv.Hard.Knocks.plex",
+    "Overtime.us@SD": "plex.tv.Overtime.plex", "SkySportsNFL.uk@SD": "Sky.Sports.NFL.uk", "TSN4.ca@SD": "TSN.4.ca2",
+}
 NOISE = r"\b(hd|sd|fhd|uhd|4k|tv|channel|the|east|feed|alt|alternate|dt|network|live|us|usa)\b"
 
 def norm(s):
@@ -76,7 +94,8 @@ for line in share_lines:
     m = re.match(r"^-- epg_ripper_(.+) --$", line)
     if m: section = m.group(1); continue
     if section not in SHARE_SECTIONS or not line or "dummy" in line.lower(): continue
-    epg.append((line, section, "us", norm(line.rsplit(".", 1)[0].replace(".", " "))))
+    ctry = "*" if section == "PLEX1" else re.sub(r"[_0-9].*$", "", line.rsplit(".", 1)[-1].lower())
+    epg.append((line, section, ctry, norm(line.rsplit(".", 1)[0].replace(".", " "))))
 
 by_country = defaultdict(list); exact = defaultdict(list); callsign = defaultdict(list)
 for e in epg:
@@ -86,7 +105,9 @@ for e in epg:
             callsign[cs].append(e)
 pick = lambda c: sorted(c, key=lambda e: (SRC_RANK[e[1]], len(e[0])))[0]
 
+by_id = {e[0]: e for e in epg}
 def match(name, tvgid, country):
+    if tvgid in OVERRIDES and OVERRIDES[tvgid] in by_id: return by_id[OVERRIDES[tvgid]], "override"
     # 1. same id already exists in iptv-epg.org once the iptv-org "@feed" suffix is dropped
     base = tvgid.split("@")[0].lower()
     if base and base in ids_exact: return ids_exact[base], "id"
@@ -139,8 +160,12 @@ def clean_group(label, g):
     f = flag(code)
     return f"{f} {name}" if f else name
 
-out = ["#EXTM3U"]; stats = defaultdict(lambda: defaultdict(int)); by_src = defaultdict(int)
-samples = defaultdict(list); unmatched_us = []; cache = {}
+# iptv-org channels whose category includes Sports; Free-TV entries are kept when they're the same channel
+sports_ids = {m.group(1).split("@")[0].lower() for m in re.finditer(r'tvg-id="([^"]+)"[^\n]*group-title="[^"]*Sports', index_txt)}
+GROUP_ORDER = ["🏈 US Sports Networks", "📺 US Broadcast Networks", "🏆 League & Team Channels",
+               "🌎 International - US Leagues", "🏅 More Sports"]
+groups_out = defaultdict(list); stats = defaultdict(lambda: defaultdict(int)); by_src = defaultdict(int)
+used_sections = set(); dropped_no_epg = []; cache = {}
 for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org", index_txt)]:
     L = text.splitlines()
     i = 0
@@ -150,7 +175,12 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
         j = i + 1; extra = []
         while j < len(L) and L[j].startswith("#"): extra.append(L[j]); j += 1
         url = L[j] if j < len(L) else ""
+        i = j + 1
         tid = (re.search(r'tvg-id="([^"]*)"', l) or [None, ""])[1]
+        g = (re.search(r'group-title="([^"]*)"', l) or [None, ""])[1]
+        # sports only
+        if label == "iptv-org" and "Sports" not in g.split(";"): continue
+        if label == "Free-TV" and tid.split("@")[0].lower() not in sports_ids: continue
         name = l.rsplit(",", 1)[-1].strip()
         tc = (re.search(r'tvg-country="([^"]*)"', l) or [None, ""])[1].lower()
         m = re.search(r"\.([a-z]{2})(@|$)", tid)
@@ -158,22 +188,23 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
         key = (name, tid, country)
         if key not in cache: cache[key] = match(name, tid, country)
         e, how = cache[key]
-        stats[label]["total"] += 1
-        if country == "us": stats[label]["us_total"] += 1
-        if e:
-            stats[label]["matched"] += 1; by_src[e[1]] += 1
-            if country == "us": stats[label]["us_matched"] += 1
-            l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{e[0]}"', l) if 'tvg-id="' in l else l.replace("#EXTINF:-1", f'#EXTINF:-1 tvg-id="{e[0]}"', 1)
-            if len(samples[how]) < 25: samples[how].append(f"{name}  ->  {e[0]}")
-        elif country == "us" and len(unmatched_us) < 300:
-            unmatched_us.append(name)
-        g = (re.search(r'group-title="([^"]*)"', l) or [None, "Other"])[1]
-        ng = clean_group(label, g)
+        stats[label]["sports"] += 1
+        # EPG only: a channel appears once a guide is mapped to it
+        if not e:
+            dropped_no_epg.append(f"{label}: {name}"); continue
+        stats[label]["kept"] += 1; by_src[e[1]] += 1
+        if e[1] != "iptv-epg.org": used_sections.add(e[1])
+        l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{e[0]}"', l) if 'tvg-id="' in l else l.replace("#EXTINF:-1", f'#EXTINF:-1 tvg-id="{e[0]}"', 1)
+        ng = SPORTS_GROUPS.get(g, g) if label == "Sports" else "🏅 More Sports"
         l = re.sub(r'group-title="[^"]*"', f'group-title="{ng}"', l) if 'group-title="' in l else l.replace(",", f' group-title="{ng}",', 1)
-        out += [l] + extra + [url]
-        i = j + 1
+        groups_out[ng].append([l] + extra + [url])
 
-urls = ["https://iptv-epg.org/files/epg-us.xml.gz"] + [f"https://epgshare01.online/epgshare01/epg_ripper_{s}.xml.gz" for s in ["US2", "US_LOCALS1", "US_SPORTS1"]]
-out[0] = f'#EXTM3U x-tvg-url="{",".join(urls)}"'
+out = []
+for gname in GROUP_ORDER + [g for g in groups_out if g not in GROUP_ORDER]:
+    for entry in groups_out.get(gname, []): out += entry
+urls = ["https://iptv-epg.org/files/epg-us.xml.gz"] + [f"https://epgshare01.online/epgshare01/epg_ripper_{s}.xml.gz" for s in SHARE_SECTIONS if s in used_sections]
+out = [f'#EXTM3U x-tvg-url="{",".join(urls)}"'] + out
 open("combined-tv.m3u", "w", encoding="utf-8").write("\n".join(out) + "\n")
+open("epg-sources.txt", "w", encoding="utf-8").write("\n".join(urls) + "\n")
 print(json.dumps({k: dict(v) for k, v in stats.items()}), dict(by_src))
+print("no guide yet:", len(dropped_no_epg)); print("\n".join(dropped_no_epg[:80]))
