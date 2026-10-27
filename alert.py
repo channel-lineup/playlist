@@ -50,9 +50,9 @@ def tiers(title, sub, desc, match_line):
     if has(text, r"\bChicago Cubs\b") or has(match_line, r"\bCubs\b") \
        or (has(title + " " + sub + " " + desc[:200], r"\bWorld Series\b") and not has(text, NOT_WORLD_SERIES)):
         hits.append("Baseball")
-    # WNBA & international tier: Indiana Fever games, OR Clark/Mitchell named, OR USA women's national team games
-    if has(text, r"Indiana Fever") or has(text, r"Caitlin Clark", r"Kelsey Mitchell") \
-       or has(text, r"USA Women'?s Basketball", r"FIBA USA", r"Team USA.{0,40}women", r"women.{0,40}Team USA"):
+    # WNBA & international tier: any Indiana Fever game; USA Women's Basketball / FIBA / other games
+    # only when Caitlin Clark or Kelsey Mitchell is named in the listing
+    if has(text, r"Indiana Fever") or has(text, r"Caitlin Clark", r"Kelsey Mitchell"):
         hits.append("WNBA/International")
     # Football tier (OR)
     if has(text, r"Green Bay Packers", r"\bPackers\b", r"Super Bowl"):
