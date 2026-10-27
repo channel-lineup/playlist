@@ -1,6 +1,6 @@
 """Rebuilds combined-tv.m3u daily: merges a US-sports subset of iptv-org, the Free-TV playlist
 and the full iptv-org playlist (duplicates kept), and remaps tvg-ids to the user's EPG sources."""
-import re, sys, json, gzip, io, unicodedata, urllib.request
+import re, sys, os, json, gzip, io, unicodedata, urllib.request
 from collections import defaultdict
 from rapidfuzz import process, fuzz
 
@@ -179,9 +179,9 @@ FREETV_SPORTS = re.compile(r"(?i)sport|\bspor\b|deport|esporte|varzesh|calcio|te
 # iptv-org channels whose category includes Sports; Free-TV entries are kept when they're the same channel
 sports_ids = {m.group(1).split("@")[0].lower() for m in re.finditer(r'tvg-id="([^"]+)"[^\n]*group-title="[^"]*Sports', index_txt)}
 GROUP_ORDER = ["🏈 US Sports Networks", "📺 US Broadcast Networks", "🏆 League & Team Channels",
-               "🌎 International - US Leagues", "🏅 More Sports", "🧭 Sports - No Guide", "📰 Local News Streams"]
+               "🌎 International - US Leagues", "🏅 More Sports", "🔔 Alert Games", "🧭 Sports - No Guide", "📰 Local News Streams"]
 groups_out = defaultdict(list); stats = defaultdict(lambda: defaultdict(int)); by_src = defaultdict(int)
-used_sections = set(); dropped_no_epg = []; cache = {}
+used_sections = set(); dropped_no_epg = []; cache = {}; news_pool = {}
 for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org", index_txt)]:
     L = text.splitlines()
     i = 0
@@ -201,6 +201,9 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
         if label == "Sports" and g == "US Broadcast Networks" and news_only(tid, url):
             if "frequency.stream" in url:   # STIRR shut down; these links are permanently dead
                 dropped_news_only.append(name); continue
+            tc0 = (re.search(r'tvg-country="([^"]*)"', l) or [None, ""])[1].lower()
+            e0, _ = match(name, tid, "us")
+            if e0: news_pool.setdefault(e0[0], []).append((l, list(extra), url))
             l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{NO_EPG_ID}"', l)
             l = re.sub(r' tvg-name="[^"]*"', "", l)
             l = re.sub(r'group-title="[^"]*"', 'group-title="📰 Local News Streams"', l)
@@ -231,7 +234,12 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
 out = []
 for gname in GROUP_ORDER + [g for g in groups_out if g not in GROUP_ORDER]:
     for entry in groups_out.get(gname, []): out += entry
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import alert
+ALERT_ONLY = alert.ALERT_ONLY            # Des Moines locals + Marquee, checked for alerts
+used_sections |= {"US_LOCALS1", "US2"}
 urls = ["https://iptv-epg.org/files/epg-us.xml.gz"] + [f"https://epgshare01.online/epgshare01/epg_ripper_{s}.xml.gz" for s in SHARE_SECTIONS if s in used_sections]
+
+
 EPG_LINK = "https://raw.githubusercontent.com/channel-lineup/playlist/main/epg.xml.gz"
 open("epg-sources.txt", "w", encoding="utf-8").write("\n".join(urls) + "\n")
 print(json.dumps({k: dict(v) for k, v in stats.items()}), dict(by_src))
@@ -239,7 +247,7 @@ print("no guide yet:", len(dropped_no_epg), "| news-only locals dropped:", len(d
 
 # ---- one combined guide: only the channels in this playlist, from every source ----
 import xml.etree.ElementTree as ET, os
-wanted = set(re.findall(r'tvg-id="([^"]+)"', "\n".join(out))) - {NO_EPG_ID}
+wanted = (set(re.findall(r'tvg-id="([^"]+)"', "\n".join(out))) - {NO_EPG_ID}) | set(ALERT_ONLY)
 channels, programmes, found = [], [], set()
 for u in urls:
     req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
@@ -265,6 +273,24 @@ with gzip.open("epg.xml.gz.tmp", "wt", encoding="utf-8") as f:
     for p in programmes: f.write(p.strip() + "\n")
     f.write("</tv>\n")
 os.replace("epg.xml.gz.tmp", "epg.xml.gz")
+# ---- alert channels: if an upcoming alert game is on a channel that has a stream but isn't in the guided
+#      playlist, add that stream to "🔔 Alert Games" with its guide (it drops out again once no games are coming)
+guided = {c for c in re.findall(r'tvg-id="([^"]+)"', "\n".join(out)) if c != NO_EPG_ID}
+upcoming = alert.find_events(ET.parse(gzip.open("epg.xml.gz")).getroot(), -240, 7 * 24 * 60, alert.NOW)
+added = []
+for ev in upcoming.values():
+    for cid in ev["channels"]:
+        if cid not in guided and cid in news_pool:
+            for l, extra, url in news_pool.pop(cid):
+                l = re.sub(r'tvg-id="[^"]*"', f'tvg-id="{cid}"', l)
+                l = re.sub(r'group-title="[^"]*"', 'group-title="🔔 Alert Games"', l)
+                groups_out["🔔 Alert Games"].append([l] + extra + [url]); added.append(cid)
+            guided.add(cid)
+if added:
+    out = []
+    for gname in GROUP_ORDER + [g for g in groups_out if g not in GROUP_ORDER]:
+        for entry in groups_out.get(gname, []): out += entry
+print("alert games ahead:", len(upcoming), "| alert channels added to playlist:", sorted(set(added)))
 out = [f'#EXTM3U x-tvg-url="{EPG_LINK}"'] + out
 open("combined-tv.m3u", "w", encoding="utf-8").write("\n".join(out) + "\n")
 print(f"guide: {len(found)}/{len(wanted)} channels, {len(programmes)} programmes, {os.path.getsize('epg.xml.gz')/1e6:.1f} MB")
