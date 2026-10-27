@@ -1,0 +1,29 @@
+name: Sports alerts
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes
+  workflow_dispatch:
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency: sports-alerts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: alerts-sent.json
+          key: alerts-state-${{ github.run_id }}
+          restore-keys: alerts-state-
+      - run: python3 alert.py
+        env:
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: alerts-sent.json
+          key: alerts-state-${{ github.run_id }}
