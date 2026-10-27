@@ -160,6 +160,18 @@ def clean_group(label, g):
     f = flag(code)
     return f"{f} {name}" if f else name
 
+# Local ABC/CBS/NBC/FOX streams from these hosts are station news-only feeds (no network shows or games);
+# checked against live frames during Monday Night Football. frequency.stream is the shut-down STIRR service.
+from urllib.parse import urlparse
+NEWS_ONLY_HOSTS = ("tubi.video", "amagi.tv", "uplynk.com", "townnews.g-mana.live", "fuelmedia.io", "field59.com",
+                   "frequency.stream", "lura.live", "doubleclick.net", "dai.google.com", "d368vp0qqzvkid.cloudfront.net",
+                   "d3svnrf3rmq619.cloudfront.net", "d2a6g6zgxepbwi.cloudfront.net")
+NETWORK_KEEP_IDS = {"Telemundo.us@WKAQTV"}   # NBC-local host, but carries the full Telemundo network feed
+def news_only(tid, url):
+    if tid in NETWORK_KEEP_IDS: return False
+    host = urlparse(url).netloc.lower()
+    return host.endswith(NEWS_ONLY_HOSTS) or "nbculocallive" in host
+dropped_news_only = []
 # iptv-org channels whose category includes Sports; Free-TV entries are kept when they're the same channel
 sports_ids = {m.group(1).split("@")[0].lower() for m in re.finditer(r'tvg-id="([^"]+)"[^\n]*group-title="[^"]*Sports', index_txt)}
 GROUP_ORDER = ["🏈 US Sports Networks", "📺 US Broadcast Networks", "🏆 League & Team Channels",
@@ -181,6 +193,8 @@ for label, text in [("Sports", sports_txt), ("Free-TV", freetv_txt), ("iptv-org"
         # sports only
         if label == "iptv-org" and "Sports" not in g.split(";"): continue
         if label == "Free-TV" and tid.split("@")[0].lower() not in sports_ids: continue
+        if label == "Sports" and g == "US Broadcast Networks" and news_only(tid, url):
+            dropped_news_only.append(l.rsplit(",", 1)[-1].strip()); continue
         name = l.rsplit(",", 1)[-1].strip()
         tc = (re.search(r'tvg-country="([^"]*)"', l) or [None, ""])[1].lower()
         m = re.search(r"\.([a-z]{2})(@|$)", tid)
@@ -203,8 +217,39 @@ out = []
 for gname in GROUP_ORDER + [g for g in groups_out if g not in GROUP_ORDER]:
     for entry in groups_out.get(gname, []): out += entry
 urls = ["https://iptv-epg.org/files/epg-us.xml.gz"] + [f"https://epgshare01.online/epgshare01/epg_ripper_{s}.xml.gz" for s in SHARE_SECTIONS if s in used_sections]
-out = [f'#EXTM3U x-tvg-url="{",".join(urls)}"'] + out
-open("combined-tv.m3u", "w", encoding="utf-8").write("\n".join(out) + "\n")
+EPG_LINK = "https://raw.githubusercontent.com/channel-lineup/playlist/main/epg.xml.gz"
 open("epg-sources.txt", "w", encoding="utf-8").write("\n".join(urls) + "\n")
 print(json.dumps({k: dict(v) for k, v in stats.items()}), dict(by_src))
-print("no guide yet:", len(dropped_no_epg)); print("\n".join(dropped_no_epg[:80]))
+print("no guide yet:", len(dropped_no_epg), "| news-only locals dropped:", len(dropped_news_only))
+
+# ---- one combined guide: only the channels in this playlist, from every source ----
+import xml.etree.ElementTree as ET, os
+wanted = set(re.findall(r'tvg-id="([^"]+)"', "\n".join(out)))
+channels, programmes, found = [], [], set()
+for u in urls:
+    req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        stream = gzip.GzipFile(fileobj=urllib.request.urlopen(req, timeout=600))
+        for ev, el in ET.iterparse(stream, events=("end",)):
+            if el.tag == "channel":
+                cid = el.get("id")
+                if cid in wanted and cid not in found:
+                    found.add(cid); channels.append(ET.tostring(el, encoding="unicode"))
+                el.clear()
+            elif el.tag == "programme":
+                if el.get("channel") in wanted: programmes.append(ET.tostring(el, encoding="unicode"))
+                el.clear()
+        print("epg ok:", u, len(found))
+    except Exception as ex:
+        print("epg FAILED:", u, ex)
+if len(found) < len(wanted) * 0.5:
+    sys.exit(f"Only {len(found)} of {len(wanted)} channels found in the guides; keeping the previous files.")
+with gzip.open("epg.xml.gz.tmp", "wt", encoding="utf-8") as f:
+    f.write('<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="channel-lineup">\n')
+    for c in channels: f.write(c.strip() + "\n")
+    for p in programmes: f.write(p.strip() + "\n")
+    f.write("</tv>\n")
+os.replace("epg.xml.gz.tmp", "epg.xml.gz")
+out = [f'#EXTM3U x-tvg-url="{EPG_LINK}"'] + out
+open("combined-tv.m3u", "w", encoding="utf-8").write("\n".join(out) + "\n")
+print(f"guide: {len(found)}/{len(wanted)} channels, {len(programmes)} programmes, {os.path.getsize('epg.xml.gz')/1e6:.1f} MB")
