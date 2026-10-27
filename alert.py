@@ -2,7 +2,7 @@
 
 Reads the combined guide (epg.xml.gz), finds LIVE games that match the keyword tiers below and
 start 30-60 minutes from now, and sends one push per matchup listing every channel carrying it.
-Also sends the one-time premium voucher warning on 2027-04-17.
+Also sends the one-time subscription reminder set in the rules.
 
 Push service: Pushover (secrets PUSHOVER_TOKEN + PUSHOVER_USER), or ntfy (secret NTFY_TOPIC).
 Already-sent alerts are remembered in alerts-sent.json, kept in the Actions cache (not committed).
@@ -18,11 +18,8 @@ DRY_RUN = os.environ.get("ALERT_DRY_RUN") == "1"
 WINDOW_MIN, WINDOW_MAX = 30, 60          # alert when kickoff is this many minutes away
 GRACE_MIN = 20                           # if a run is delayed, still alert down to 20 minutes before
 STATE_FILE = "alerts-sent.json"
-# guide channels checked for alerts that aren't in the playlist (no stream exists for them): Des Moines locals + Cubs network
-ALERT_ONLY = {"WOI-DT.us_locals1": "ABC 5 WOI (Des Moines)", "KCCI-DT.us_locals1": "CBS 8 KCCI (Des Moines)",
-              "WHO-DT.us_locals1": "NBC 13 WHO (Des Moines)", "KDSM-DT.us_locals1": "FOX 17 KDSM (Des Moines)",
-              "KCWI-DT.us_locals1": "The CW 23 KCWI (Des Moines)", "KFPX-DT.us_locals1": "ION KFPX (Des Moines)",
-              "Marquee.Sports.Network.HD.us2": "Marquee Sports Network"}
+# extra guide channels checked for alerts that aren't in the playlist (private, from ALERT_RULES)
+ALERT_ONLY = json.loads(os.environ.get("ALERT_RULES") or "{}").get("alert_only", {})
 
 def playlist_names(path="combined-tv.m3u"):
     """tvg-id -> list of channel names exactly as they appear in the playlist (and in TiviMate)."""
@@ -36,39 +33,29 @@ def playlist_names(path="combined-tv.m3u"):
     return names
 
 # ---------------------------------------------------------------- keyword tiers
+# The keyword rules and extra alert channels are private: they come from the ALERT_RULES repository secret
+# (JSON). Each tier fires if any "any" pattern matches the listing, any "line_any" pattern matches the matchup
+# line, or any "title_any" pattern matches the title/start of the description - unless a "none" pattern matches.
+RULES = json.loads(os.environ.get("ALERT_RULES") or "{}")
+TIERS = RULES.get("tiers", {})
+
 def has(text, *phrases):
     return any(re.search(p, text, re.I) for p in phrases)
 
-# Iowa as a TEAM in the matchup line (not Iowa State / Northern Iowa / "Ames, Iowa" in a description)
-IOWA_TEAM = r"(?<!Northern )(?<!, )\bIowa\b(?! State| Western| Wesleyan| Central| Wild| Cubs| Barnstormers)"
-NOT_WORLD_SERIES = r"poker|climbing|darts|rodeo|beer pong|e-?sports|of fighting|cornhole|bowling|pickleball"
-
 def tiers(title, sub, desc, match_line):
     text = " ".join(filter(None, [title, sub, desc]))
+    head = " ".join([title, sub, desc[:200]])
     hits = []
-    # Baseball tier (OR): Chicago Cubs, or any World Series game
-    if has(text, r"\bChicago Cubs\b") or has(match_line, r"\bCubs\b") \
-       or (has(title + " " + sub + " " + desc[:200], r"\bWorld Series\b") and not has(text, NOT_WORLD_SERIES)):
-        hits.append("Baseball")
-    # WNBA & international tier: any Indiana Fever game; USA Women's Basketball / FIBA / other games
-    # only when Caitlin Clark or Kelsey Mitchell is named in the listing
-    if has(text, r"Indiana Fever") or has(text, r"Caitlin Clark", r"Kelsey Mitchell"):
-        hits.append("WNBA/International")
-    # Football tier (OR)
-    if has(text, r"Green Bay Packers", r"\bPackers\b", r"Super Bowl"):
-        hits.append("Football")
-    # College & hockey tier (OR)
-    if has(text, r"Stanley Cup", r"NHL Finals?", r"Hawkeyes?\b") or has(match_line, IOWA_TEAM):
-        hits.append("College/Hockey")
-    # Tournament bracket tier (OR)
-    if has(text, r"March Madness", r"NCAA Tournament", r"NCAA Tourney", r"Final Four", r"NCAA .{0,30}Tournament",
-           r"Sweet (16|Sixteen)", r"Elite Eight", r"First Four"):
-        hits.append("Tournament")
+    for name, t in TIERS.items():
+        if t.get("none") and has(text, *t["none"]):
+            continue
+        if has(text, *t.get("any", [])) or has(match_line, *t.get("line_any", [])) or has(head, *t.get("title_any", [])):
+            hits.append(name)
     return hits
 
 # ---------------------------------------------------------------- live-game filter
-GAME_TITLE = re.compile(r"(?i)\b(football|baseball|basketball|hockey|wrestling|volleyball|softball|world series|super bowl|"
-                        r"stanley cup|ncaa|march madness|final four)\b|\b(at|vs\.?|v)\b|\s@\s|\s x \s")
+GAME_TITLE = re.compile(r"(?i)\b(football|baseball|basketball|hockey|wrestling|volleyball|softball|soccer|series|bowl|"
+                        r"cup|ncaa)\b|\b(at|vs\.?|v)\b|\s@\s|\s x \s")
 NOT_LIVE = re.compile(r"(?i)classic|countdown|pregame|pre-game|postgame|post-game|preview|review|highlights|kickoff show|"
                       r"\blive\b|today|tonight|\bfinal\b(?! four)|scoreboard|picks|matchup|in 60|rewind|replay|re-air|"
                       r"encore|recap|show|podcast|talk|insider|report|weekly|magazine|film|draft|fantasy|huddle|"
@@ -95,7 +82,7 @@ def is_live_game(prog):
         return False
     if GAME_TITLE.search(title):
         return True
-    # e.g. Sky "Live NFL" + "Green Bay Packers v Carolina Panthers (Kick-off 12.15am)"
+    # e.g. "Live NFL" + "Team A v Team B (Kick-off 12.15am)"
     first = re.split(r"(?<=[.!?])\s", (desc.splitlines() or [""])[0], 1)[0]
     return flagged_live and bool(re.search(r"\b(at|vs\.?|v)\b|\s@\s", first)) and len(first) < 120
 
@@ -211,14 +198,14 @@ def main():
             recent.append([ev["start"].isoformat(), sorted(words)])
     state["_recent"] = [r for r in recent if (NOW - datetime.fromisoformat(r[0])).total_seconds() < 24 * 3600]
 
-    # premium voucher: 180 days from 2026-10-26 -> expires 2027-04-24; warn on 2027-04-17 at 9:00 AM Central
-    if NOW >= datetime(2027, 4, 17, 14, 0, tzinfo=timezone.utc) and "voucher-2027-04-17" not in state:
-        if push("🚨 Time-Sensitive Subscription Alert",
-                "Premium streaming server voucher expires: April 24, 2027\nStatus: 7 days remaining - manual top-up required"):
-            state["voucher-2027-04-17"] = NOW.isoformat()
+    # one-time dated reminders from the rules: [{"key", "at_utc": "YYYY-MM-DDTHH:MM", "title", "message"}]
+    for r in RULES.get("reminders", []):
+        at = datetime.strptime(r["at_utc"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        if NOW >= at and r["key"] not in state and push(r["title"], r["message"]):
+            state[r["key"]] = NOW.isoformat()
 
     cutoff = (NOW - timedelta(days=3)).strftime("%Y%m%d%H%M")
-    state = {k: v for k, v in state.items() if k.startswith(("voucher", "_")) or k[:12] >= cutoff}
+    state = {k: v for k, v in state.items() if k.startswith(("remind", "_")) or k[:12] >= cutoff}
     json.dump(state, open(STATE_FILE, "w"), indent=0)
     print(f"checked {NOW:%Y-%m-%d %H:%M} UTC: {len(events)} matching event(s) in window")
 

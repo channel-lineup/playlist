@@ -235,7 +235,7 @@ out = []
 for gname in GROUP_ORDER + [g for g in groups_out if g not in GROUP_ORDER]:
     for entry in groups_out.get(gname, []): out += entry
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import alert
-ALERT_ONLY = alert.ALERT_ONLY            # Des Moines locals + Marquee, checked for alerts
+ALERT_ONLY = alert.ALERT_ONLY            # extra guide channels for alerts (private, from ALERT_RULES)
 used_sections |= {"US_LOCALS1", "US2"}
 urls = ["https://iptv-epg.org/files/epg-us.xml.gz"] + [f"https://epgshare01.online/epgshare01/epg_ripper_{s}.xml.gz" for s in SHARE_SECTIONS if s in used_sections]
 
