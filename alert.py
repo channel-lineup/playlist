@@ -83,7 +83,7 @@ def is_live_game(prog):
     if GAME_TITLE.search(title):
         return True
     # e.g. "Live NFL" + "Team A v Team B (Kick-off 12.15am)"
-    first = re.split(r"(?<=[.!?])\s", (desc.splitlines() or [""])[0], 1)[0]
+    first = re.split(r"(?<=[.!?])\s", (desc.splitlines() or [""])[0], maxsplit=1)[0]
     return flagged_live and bool(re.search(r"\b(at|vs\.?|v)\b|\s@\s", first)) and len(first) < 120
 
 def matchup(prog):
@@ -91,11 +91,11 @@ def matchup(prog):
     sub = (prog.findtext("sub-title") or "").strip()
     desc = (prog.findtext("desc") or "").strip()
     first = (desc.splitlines() or [""])[0]
-    sent1 = re.sub(r"\s*\(kick-?off[^)]*\)\.?", "", re.split(r"(?<=[.!?])\s", first, 1)[0], flags=re.I).rstrip(".")
+    sent1 = re.sub(r"\s*\(kick-?off[^)]*\)\.?", "", re.split(r"(?<=[.!?])\s", first, maxsplit=1)[0], flags=re.I).rstrip(".")
     for cand in (sub, first, sent1):
         if re.search(r"\b(at|vs\.?|v\.?|@)\b", cand) and len(cand) < 90:
             return cand
-    sentence = re.split(r"(?<=[.!?])\s", desc, 1)[0] if desc else ""
+    sentence = re.split(r"(?<=[.!?])\s", desc, maxsplit=1)[0] if desc else ""
     if sentence and len(sentence) < 120:
         return f"{title} - {sentence}"
     return f"{title}: {sub}" if sub else title
@@ -192,7 +192,10 @@ def main():
                          for t, w in recent):
             state[key] = "duplicate-airing"; continue  # same game re-airing on another channel/time
         chans = sorted(ev["channels"], key=lambda c: c not in in_list)
-        msg = f"Matchup Detected: {ev['matchup']}\nBroadcast Channel: {', '.join(label(c) for c in chans)}"
+        ct = ev["start"].astimezone(ZoneInfo("America/Chicago"))
+        start_txt = f"{ct:%a %b} {ct.day}, {ct:%I:%M %p}".replace(", 0", ", ") + f" {ct.tzname()}"   # e.g. Tue Oct 27, 7:08 PM CDT
+        msg = (f"Matchup Detected: {ev['matchup']}\nStart Time: {start_txt}"
+               f"\nBroadcast Channel: {', '.join(label(c) for c in chans)}")
         if push("🚨 Time-Sensitive Master Sports Alert", msg):
             state[key] = NOW.isoformat()
             recent.append([ev["start"].isoformat(), sorted(words)])
