@@ -133,7 +133,7 @@ https://d265y4sk8257lt.cloudfront.net/nh.m3u8
 https://d1a8aq6t30gkqj.cloudfront.net/v1/amc_overtime_1/samsungheadend_us/latest/main/hls/playlist_hd.m3u8
 #EXTINF:-1 tvg-id="Pac12Insider.us" tvg-logo="https://i.imgur.com/736QREy.png" group-title="🏆 League & Team Channels",Pac-12 Insider (1080p)
 https://pac12-firetv.amagi.tv/playlist.m3u8
-#EXTINF:-1 tvg-id="PBRRidePass.pluto" tvg-logo="https://i.imgur.com/gUxH97E.png" group-title="🏆 League & Team Channels",PBR RidePass (720p)
+#EXTINF:-1 tvg-id="PBRRidePass.us" tvg-logo="https://i.imgur.com/gUxH97E.png" group-title="🏆 League & Team Channels",PBR RidePass (720p)
 https://jmp2.uk/plu-60d39387706fe50007fda8e8.m3u8
 #EXTINF:-1 tvg-id="PFLMMA.pluto" tvg-logo="https://provider-static.plex.tv/epg/cms/production/96dd0531-b500-4bd4-93ca-763cbf46defe/1500x1000_PFL_SHIELD_DARK_BG_-_Allie_Dinsmore.png" group-title="🏆 League & Team Channels",PFL MMA (720p)
 https://jmp2.uk/plu-64f6180130ab3300083d896b.m3u8
@@ -313,6 +313,8 @@ https://bantel-cdn1.iptvperu.tv:1936/btnscrtn/espn_premium.stream/playlist.m3u8
 http://85.237.89.160:9590/usa-s/ESPN-U-HD/index.m3u8
 #EXTINF:-1 tvg-id="The.Fight.Network.ca2" tvg-logo="https://i.imgur.com/vlKPZHR.png" group-title="🏅 More Sports",Fight Network (1080p)
 https://d12a2vxqkkh1bo.cloudfront.net/hls/main.m3u8
+#EXTINF:-1 tvg-id="FITE247.us" tvg-logo="https://i.imgur.com/ESV6qgH.png" group-title="🏅 More Sports",FITE 24/7 (1080p)
+https://d3d85c7qkywguj.cloudfront.net/scheduler/scheduleMaster/263.m3u8
 #EXTINF:-1 tvg-id="FloHockey.us" tvg-logo="https://images.fubo.tv/channel-config-ui/station-logos/on-dark/flohockey-white.png" group-title="🏅 More Sports",FloHockey (1080p)
 https://amg02278-amg02278c2-flosports-worldwide-9916.playouts.now.amagi.tv/playlist.m3u8
 #EXTINF:-1 tvg-id="FloRacing.us" tvg-logo="https://images.fubo.tv/channel-config-ui/station-logos/on-dark/floracing-white.png" group-title="🏅 More Sports",FloRacing (1080p)
@@ -325,6 +327,8 @@ http://85.237.89.160:9590/usa-s/FOX-SPORTS-1/index.m3u8
 https://tvsen7.aynascope.net/foxsports2/index.m3u8
 #EXTINF:-1 tvg-id="Canal.Fox.Sports.(Cono.Sur).sv" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/FOX_Sports_logo.svg/960px-FOX_Sports_logo.svg.png" group-title="🏅 More Sports",Fox Sports (1080p)
 http://138.59.227.20:8000/play/a085/index.m3u8
+#EXTINF:-1 tvg-id="FTFSports.us" tvg-logo="https://i.imgur.com/yvUjOI3.png" group-title="🏅 More Sports",FTF Sports (720p)
+https://1593604785.rsc.cdn77.org/FTF/FTF_SCTE.m3u8
 #EXTINF:-1 tvg-id="fuboSportsNetwork.us" tvg-logo="https://i.imgur.com/qFNRJLb.png" group-title="🏅 More Sports",Fubo Sports Network (1080p)
 https://dnf08l6u6uxnz.cloudfront.net/master.m3u8
 #EXTINF:-1 tvg-id="GLORYKickboxing.us" tvg-logo="https://i.imgur.com/tS7Ub7i.png" group-title="🏅 More Sports",Glory Kickboxing Poland (720p)
@@ -362,7 +366,7 @@ https://d265y4sk8257lt.cloudfront.net/nh.m3u8
 https://d1a8aq6t30gkqj.cloudfront.net/v1/amc_overtime_1/samsungheadend_us/latest/main/hls/playlist_hd.m3u8
 #EXTINF:-1 tvg-id="Pac12Insider.us" tvg-logo="https://i.imgur.com/736QREy.png" group-title="🏅 More Sports",Pac-12 Insider (1080p)
 https://pac12-firetv.amagi.tv/playlist.m3u8
-#EXTINF:-1 tvg-id="PBRRidePass.pluto" tvg-logo="https://i.imgur.com/gUxH97E.png" group-title="🏅 More Sports",PBR RidePass (720p)
+#EXTINF:-1 tvg-id="PBRRidePass.us" tvg-logo="https://i.imgur.com/gUxH97E.png" group-title="🏅 More Sports",PBR RidePass (720p)
 https://jmp2.uk/plu-60d39387706fe50007fda8e8.m3u8
 #EXTINF:-1 tvg-id="PFLMMA.pluto" tvg-logo="https://provider-static.plex.tv/epg/cms/production/96dd0531-b500-4bd4-93ca-763cbf46defe/1500x1000_PFL_SHIELD_DARK_BG_-_Allie_Dinsmore.png" group-title="🏅 More Sports",PFL MMA (720p)
 https://jmp2.uk/plu-64f6180130ab3300083d896b.m3u8
@@ -780,12 +784,8 @@ https://webtvstream.bhtelecom.ba/fightbox.m3u8
 https://nosignal1.antenaplay.ro/hls/fightbox-hd/index.m3u8
 #EXTINF:-1 tvg-id="none" tvg-logo="https://i.imgur.com/mRsnztA.png" group-title="🧭 Sports - No Guide",FightBox Poland (576i)
 http://92.114.85.87:8003/play/a00b/index.m3u8
-#EXTINF:-1 tvg-id="none" tvg-logo="https://i.imgur.com/ESV6qgH.png" group-title="🧭 Sports - No Guide",FITE 24/7 (1080p)
-https://d3d85c7qkywguj.cloudfront.net/scheduler/scheduleMaster/263.m3u8
 #EXTINF:-1 tvg-id="none" tvg-logo="https://i.imgur.com/FhMQrJk.png" group-title="🧭 Sports - No Guide",Fox Sports News (1080p)
 https://skynewsau-live-premium.akamaized.net/hls/live/2105307/foxsportsnews/live_1080p.m3u8
-#EXTINF:-1 tvg-id="none" tvg-logo="https://i.imgur.com/yvUjOI3.png" group-title="🧭 Sports - No Guide",FTF Sports (720p)
-https://1593604785.rsc.cdn77.org/FTF/FTF_SCTE.m3u8
 #EXTINF:-1 tvg-id="none" tvg-logo="https://i.imgur.com/YOr1Oac.png" group-title="🧭 Sports - No Guide",FTV (Bolivia) (720p)
 https://master.tucableip.com/ftvhd/index.m3u8
 #EXTINF:-1 tvg-id="none" tvg-logo="https://i.imgur.com/I8mviBy.png" group-title="🧭 Sports - No Guide",FUEL TV (1080p)
